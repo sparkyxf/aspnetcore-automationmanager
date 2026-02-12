@@ -1,0 +1,81 @@
+@page "/script-editor"
+@inject AutomationApiClient ApiClient
+
+<PageTitle>Script Editor</PageTitle>
+
+<h1>Script Editor</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <h3>Script Metadata</h3>
+        <EditForm Model="scriptTemplate" OnValidSubmit="SaveScript">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <label>Name</label>
+                <InputText @bind-Value="scriptTemplate.Name" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label>Description</label>
+                <InputTextArea @bind-Value="scriptTemplate.Description" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label>Mode</label>
+                <InputSelect @bind-Value="scriptTemplate.Mode">
+                    <option value="RunOnce">Run Once</option>
+                    <option value="LoopXTimes">Loop X Times</option>
+                    <option value="LoopUntilStopped">Loop Until Stopped</option>
+                </InputSelect>
+            </div>
+            @if (scriptTemplate.Mode == "LoopXTimes")
+            {
+                <div class="mb-3">
+                    <label>Loop Count</label>
+                    <InputNumber @bind-Value="scriptTemplate.LoopCount" class="form-control" />
+                </div>
+            }
+            <button type="submit" class="btn btn-primary">Save</button>
+        </EditForm>
+    </div>
+    <div class="col-md-8">
+        <h3>Script Text</h3>
+        <textarea @bind="scriptTemplate.ScriptText" class="form-control" rows="20"></textarea>
+        <div class="mt-3">
+            <button class="btn btn-success" @onclick="RunScript">Run</button>
+            <button class="btn btn-warning" @onclick="PauseScript">Pause</button>
+            <button class="btn btn-danger" @onclick="CancelScript">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ScriptTemplateModel scriptTemplate = new();
+
+    private async Task SaveScript()
+    {
+        // Save logic
+    }
+
+    private async Task RunScript()
+    {
+        // Run logic
+    }
+
+    private async Task PauseScript()
+    {
+        // Pause logic
+    }
+
+    private async Task CancelScript()
+    {
+        // Cancel logic
+    }
+
+    public class ScriptTemplateModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string ScriptText { get; set; } = string.Empty;
+        public string Mode { get; set; } = "RunOnce";
+        public int? LoopCount { get; set; }
+    }
+}

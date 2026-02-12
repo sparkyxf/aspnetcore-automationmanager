@@ -1,0 +1,32 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["AutomationManager.Web.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet />
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container">
+            <a class="navbar-brand" href="/">AutomationManager</a>
+            <div class="navbar-nav">
+                <NavLink class="nav-link" href="/dashboard">Dashboard</NavLink>
+                <NavLink class="nav-link" href="/script-editor">Script Editor</NavLink>
+            </div>
+        </div>
+    </nav>
+    <div class="container mt-4">
+        <Routes />
+    </div>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,44 @@
+@page "/dashboard"
+@inject AutomationApiClient ApiClient
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1>Automation Dashboard</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <h3>Connected Agents</h3>
+        @if (agents is not null)
+        {
+            <ul class="list-group">
+                @foreach (var agent in agents)
+                {
+                    <li class="list-group-item">
+                        <strong>@agent.Name</strong> - @agent.Status
+                        @if (agent.Status == "Connected")
+                        {
+                            <span class="badge bg-success">Online</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Offline</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+    <div class="col-md-6">
+        <h3>Running Executions</h3>
+        <p>Execution status will be displayed here.</p>
+    </div>
+</div>
+
+@code {
+    private IEnumerable<AgentResponse>? agents;
+
+    protected override async Task OnInitializedAsync()
+    {
+        agents = await ApiClient.GetAgentsAsync();
+    }
+}
