@@ -9,10 +9,13 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddHttpClient<AutomationApiClient>(client =>
 {
-    client.BaseAddress = new Uri("https://localhost:5001"); // API URL
+    client.BaseAddress = new Uri("http://localhost:5200"); // API URL
 });
 
-builder.Services.AddScoped<AutomationWebSocketClient>();
+builder.Services.AddScoped<AutomationWebSocketClient>(provider =>
+{
+    return new AutomationWebSocketClient("ws://localhost:5200/ws/agent");
+});
 
 var app = builder.Build();
 

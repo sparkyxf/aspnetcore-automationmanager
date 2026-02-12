@@ -12,12 +12,11 @@ public class AgentService : IDisposable
     private readonly IConfiguration _configuration;
     private Guid _agentId = Guid.NewGuid(); // In real app, load from config
 
-    public AgentService(ILogger<AgentService> logger, IConfiguration configuration)
+    public AgentService(ILogger<AgentService> logger, IConfiguration configuration, AutomationWebSocketClient webSocketClient)
     {
         _logger = logger;
         _configuration = configuration;
-        var url = _configuration["ApiBaseUrl"] + "/ws/agent";
-        _webSocketClient = new AutomationWebSocketClient(url);
+        _webSocketClient = webSocketClient;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)

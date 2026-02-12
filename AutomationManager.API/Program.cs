@@ -63,9 +63,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Routes
-app.MapOpenApi();
-app.MapSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapSwagger();
+    app.UseSwaggerUI();
+}
 
 app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
 app.MapHealthChecks("/health/ready");
