@@ -1,5 +1,9 @@
 using AutomationManager.SDK;
 
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using AutomationManager.Agent;
+
 namespace AutomationManager.Agent;
 
 public class Worker : BackgroundService
@@ -24,7 +28,7 @@ public class Worker : BackgroundService
             await Task.Delay(1000, stoppingToken);
         }
 
-        await _agentService.StopAsync();
+        await _agentService.StopAsync(stoppingToken);
     }
 
     public override void Dispose()

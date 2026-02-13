@@ -34,6 +34,7 @@ public static class DependencyInjection
 
         // Domain services
         services.AddScoped<ScriptParser>();
+        services.AddScoped<ScriptValidator>();
         services.AddScoped<IExecutionEngine, ExecutionEngine>();
 
         // Validators

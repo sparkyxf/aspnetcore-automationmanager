@@ -1,10 +1,12 @@
-<Project Sdk="Microsoft.NET.Sdk.Worker">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-AutomationManager.Agent-68ebd307-f81c-417f-83c3-96021446d81c</UserSecretsId>
+    <OutputType>Exe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,7 +16,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\AutomationManager.SDK\AutomationManager.SDK.csproj" />
     <ProjectReference Include="..\AutomationManager.Contracts\AutomationManager.Contracts.csproj" />
+    <ProjectReference Include="..\AutomationManager.Domain\AutomationManager.Domain.csproj" />
   </ItemGroup>
 </Project>

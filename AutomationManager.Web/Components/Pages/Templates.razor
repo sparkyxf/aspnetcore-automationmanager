@@ -1,0 +1,281 @@
+@page "/templates"
+@using AutomationManager.Web.Services
+@inject ScriptExecutionService ScriptService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Script Templates - AutomationManager</PageTitle>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h2 mb-0">
+                <i class="bi bi-journal-code me-2 text-primary"></i>Script Templates
+            </h1>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary" @onclick="RefreshTemplates">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+                <a href="/script-editor" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-1"></i>New Template
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="loading-spinner"></div>
+        <p class="mt-2 text-muted">Loading templates...</p>
+    </div>
+}
+else if (templates?.Any() == true)
+{
+    <div class="row">
+        @foreach (var template in templates)
+        {
+            <div class="col-lg-6 col-xl-4 mb-4">
+                <div class="card h-100 card-hover fade-in">
+                    <div class="card-header d-flex justify-content-between align-items-start">
+                        <h6 class="card-title mb-0 flex-grow-1">@template.Name</h6>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="/script-editor?templateId=@template.Id">
+                                        <i class="bi bi-pencil me-2"></i>Edit
+                                    </a>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" @onclick="() => DuplicateTemplate(template)">
+                                        <i class="bi bi-files me-2"></i>Duplicate
+                                    </button>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <button class="dropdown-item text-danger" @onclick="() => ConfirmDeleteTemplate(template)">
+                                        <i class="bi bi-trash me-2"></i>Delete
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text text-muted mb-2">@template.Description</p>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted">
+                                <i class="bi bi-arrow-repeat me-1"></i>@template.Mode
+                            </small>
+                            @if (template.LoopCount.HasValue)
+                            {
+                                <span class="badge bg-secondary">@template.LoopCount loops</span>
+                            }
+                        </div>
+                        
+                        @if (!string.IsNullOrEmpty(template.ScriptText))
+                        {
+                            <div class="script-preview">
+                                <small class="text-muted d-block mb-1">Script Preview:</small>
+                                <code class="small">@GetScriptPreview(template.ScriptText)</code>
+                            </div>
+                        }
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <div class="d-flex gap-2">
+                            <a href="/script-editor?templateId=@template.Id" class="btn btn-outline-primary btn-sm flex-fill">
+                                <i class="bi bi-pencil me-1"></i>Edit
+                            </a>
+                            <button class="btn btn-success btn-sm flex-fill" @onclick="() => UseTemplate(template)">
+                                <i class="bi bi-play me-1"></i>Use
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12 d-flex justify-content-center">
+            <nav>
+                <!-- Pagination would go here if needed -->
+            </nav>
+        </div>
+    </div>
+}
+else
+{
+    <div class="text-center py-5">
+        <i class="bi bi-journal-x display-1 text-muted"></i>
+        <h4 class="mt-3 text-muted">No Templates Found</h4>
+        <p class="text-muted mb-4">Create your first automation script template to get started.</p>
+        <a href="/script-editor" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Create Template
+        </a>
+    </div>
+}
+
+@if (showDeleteConfirmation)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle me-2 text-warning"></i>Confirm Deletion
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete the template <strong>"@templateToDelete?.Name"</strong>?</p>
+                    <p class="text-muted small">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDelete">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="DeleteTemplate" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <div class="loading-spinner me-1"></div>
+                        }
+                        else
+                        {
+                            <i class="bi bi-trash me-1"></i>
+                        }
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IEnumerable<ScriptTemplateResponse>? templates;
+    private bool isLoading = true;
+    private bool showDeleteConfirmation = false;
+    private bool isDeleting = false;
+    private ScriptTemplateResponse? templateToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTemplates();
+    }
+
+    private async Task LoadTemplates()
+    {
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            templates = await ScriptService.GetScriptTemplatesAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Failed to load templates: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshTemplates()
+    {
+        await LoadTemplates();
+    }
+
+    private void UseTemplate(ScriptTemplateResponse template)
+    {
+        Navigation.NavigateTo($"/script-editor?templateId={template.Id}");
+    }
+
+    private async Task DuplicateTemplate(ScriptTemplateResponse template)
+    {
+        try
+        {
+            var duplicateRequest = new CreateScriptTemplateRequest
+            {
+                Name = $"{template.Name} (Copy)",
+                Description = template.Description,
+                ScriptText = template.ScriptText,
+                Mode = template.Mode,
+                LoopCount = template.LoopCount
+            };
+
+            var result = await ScriptService.CreateScriptTemplateAsync(duplicateRequest);
+            if (result != null)
+            {
+                await LoadTemplates();
+                await JS.InvokeVoidAsync("console.log", "Template duplicated successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Failed to duplicate template: {ex.Message}");
+        }
+    }
+
+    private void ConfirmDeleteTemplate(ScriptTemplateResponse template)
+    {
+        templateToDelete = template;
+        showDeleteConfirmation = true;
+        StateHasChanged();
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirmation = false;
+        templateToDelete = null;
+        isDeleting = false;
+        StateHasChanged();
+    }
+
+    private async Task DeleteTemplate()
+    {
+        if (templateToDelete == null) return;
+        
+        isDeleting = true;
+        StateHasChanged();
+        
+        try
+        {
+            var success = await ScriptService.DeleteScriptTemplateAsync(templateToDelete.Id);
+            if (success)
+            {
+                await LoadTemplates();
+                CancelDelete();
+                await JS.InvokeVoidAsync("console.log", "Template deleted successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Failed to delete template: {ex.Message}");
+        }
+        finally
+        {
+            isDeleting = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetScriptPreview(string scriptText)
+    {
+        if (string.IsNullOrWhiteSpace(scriptText))
+            return "No content";
+            
+        var lines = scriptText.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(l => !string.IsNullOrWhiteSpace(l.Trim()) && !l.Trim().StartsWith("//"))
+            .Take(3)
+            .Select(l => l.Trim());
+            
+        var preview = string.Join("; ", lines);
+        return preview.Length > 100 ? preview.Substring(0, 100) + "..." : preview;
+    }
+}

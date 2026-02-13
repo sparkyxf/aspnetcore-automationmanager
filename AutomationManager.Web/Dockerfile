@@ -17,5 +17,6 @@ RUN dotnet publish "AutomationManager.Web.csproj" -c Release -o /app/publish /p:
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
+RUN mkdir -p /app/keys
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "AutomationManager.Web.dll"]

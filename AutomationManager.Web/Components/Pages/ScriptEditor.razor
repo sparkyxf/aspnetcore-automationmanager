@@ -1,0 +1,513 @@
+@page "/script-editor"
+@rendermode InteractiveServer
+@using AutomationManager.Web.Services
+@using AutomationManager.Contracts
+@using AutomationManager.Web.Components
+@inject ScriptExecutionService ScriptService
+@inject NavigationManager Navigation
+
+<PageTitle>Script Editor - AutomationManager</PageTitle>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h2 mb-0">
+                <i class="bi bi-code-square me-2 text-primary"></i>Script Editor
+            </h1>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary" @onclick="LoadTemplatesList">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+                <button class="btn btn-success" @onclick="SaveScript" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <div class="loading-spinner me-1"></div>
+                    }
+                    else
+                    {
+                        <i class="bi bi-save me-1"></i>
+                    }
+                    Save Template
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show" role="alert">
+        <i class="bi @(isError ? "bi-exclamation-triangle" : "bi-check-circle") me-2"></i>
+        @statusMessage
+        <button type="button" class="btn-close" @onclick="() => statusMessage = null"></button>
+    </div>
+}
+
+<div class="row">
+    <!-- Left Column: Script Configuration and Templates -->
+    <div class="col-lg-4 mb-3">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-gear me-1"></i>Script Configuration
+                </h6>
+            </div>
+            <div class="card-body">
+                <EditForm Model="scriptRequest" OnValidSubmit="SaveScript">
+                    <DataAnnotationsValidator />
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Script Template</label>
+                        <select class="form-select" value="@GetSelectedTemplate()" @onchange="OnTemplateSelectionChanged">
+                            <option value="new">New script</option>
+                            @if (scriptTemplates != null)
+                            {
+                                @foreach (var template in scriptTemplates)
+                                {
+                                    <option value="@template.Id">@template.Name</option>
+                                }
+                            }
+                        </select>
+                        <div class="form-text">Select existing script to edit or choose "New script" to create one</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Script Name</label>
+                        <InputText @bind-Value="scriptRequest.Name" class="form-control" placeholder="Enter script name" />
+                        <ValidationMessage For="() => scriptRequest.Name" class="validation-message" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Description</label>
+                        <InputTextArea @bind-Value="scriptRequest.Description" class="form-control" rows="3" placeholder="Describe what this script does" />
+                        <ValidationMessage For="() => scriptRequest.Description" class="validation-message" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Execution Mode</label>
+                        <InputSelect @bind-Value="scriptRequest.Mode" class="form-select" @bind-Value:after="OnExecutionModeChanged">
+                            <option value="RunOnce">Run Once</option>
+                            <option value="LoopXTimes">Loop X Times</option>
+                            <option value="LoopUntilStopped">Loop Until Stopped</option>
+                        </InputSelect>
+                    </div>
+                    
+                    @if (scriptRequest.Mode == "LoopXTimes")
+                    {
+                        <div class="mb-3 slide-up">
+                            <label class="form-label fw-bold">Loop Count</label>
+                            <InputNumber @bind-Value="scriptRequest.LoopCount" class="form-control" min="1" max="1000" />
+                            <div class="form-text">Number of times to repeat the script (1-1000)</div>
+                        </div>
+                    }
+                </EditForm>
+            </div>
+        </div>
+
+
+
+        <!-- Agent Connection Component -->
+        <AgentConnection SelectedAgentId="@selectedAgentId"
+                        SelectedAgentIdChanged="OnAgentIdChanged"
+                        ScriptText="@scriptRequest.ScriptText"
+                        IsScriptValidated="@isValidated"
+                        ExecutionMode="@currentExecutionMode"
+                        ExecutionModeChanged="OnExecutionModeChangedFromAgent"
+                        LoopCount="@currentLoopCount"
+                        LoopCountChanged="OnLoopCountChangedFromAgent"
+                        OnRunScriptRequested="RunScriptOnAgent"
+                        OnPauseScriptRequested="PauseAgentScript"
+                        OnResumeScriptRequested="ResumeAgentScript"
+                        OnStopScriptRequested="StopAgentScript" />
+    </div>
+    
+    <!-- Right Column: Script Editor -->
+    <div class="col-lg-8 mb-3">
+        <ScriptTextEditor ScriptText="@scriptRequest.ScriptText"
+                         ScriptTextChanged="OnScriptTextChanged"
+                         ValidationErrors="@validationErrors"
+                         IsValidated="@isValidated"
+                         OnValidateRequested="ValidateScript"
+                         OnClearRequested="ClearScript" />
+    </div>
+</div>
+
+@code {
+    private CreateScriptTemplateRequest scriptRequest = new()
+    {
+        Mode = "RunOnce"
+    };
+    
+    private List<string> validationErrors = new();
+    private IEnumerable<ScriptTemplateResponse>? scriptTemplates;
+    
+    private Guid? currentTemplateId;
+    private Guid? selectedAgentId;
+    
+    private bool isSaving = false;
+    private bool isValidated = false;
+    
+    private string? statusMessage;
+    private bool isError = false;
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public Guid? AgentId { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public Guid? TemplateId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        selectedAgentId = AgentId;
+        
+        await LoadTemplatesList();
+        
+        // If templateId is provided in query string, load that template
+        if (TemplateId.HasValue)
+        {
+            await LoadTemplateById(TemplateId.Value);
+        }
+    }
+
+    private async Task LoadTemplatesList()
+    {
+        try
+        {
+            scriptTemplates = await ScriptService.GetScriptTemplatesAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Failed to load templates: {ex.Message}", true);
+        }
+    }
+
+    private async Task LoadTemplateById(Guid templateId)
+    {
+        try
+        {
+            var template = await ScriptService.GetScriptTemplateAsync(templateId);
+            if (template != null)
+            {
+                scriptRequest.Name = template.Name;
+                scriptRequest.Description = template.Description;
+                scriptRequest.ScriptText = template.ScriptText;
+                scriptRequest.Mode = template.Mode;
+                scriptRequest.LoopCount = template.LoopCount;
+                
+                // Sync execution mode state
+                currentExecutionMode = template.Mode switch
+                {
+                    "LoopXTimes" => ExecutionMode.LoopXTimes,
+                    "LoopUntilStopped" => ExecutionMode.LoopUntilStopped,
+                    _ => ExecutionMode.RunOnce
+                };
+                currentLoopCount = template.LoopCount ?? 1;
+                
+                currentTemplateId = templateId;
+                ShowMessage("Template loaded successfully", false);
+                ValidateScript();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Failed to load template: {ex.Message}", true);
+        }
+    }
+
+    private Task OnAgentIdChanged(Guid? agentId)
+    {
+        selectedAgentId = agentId;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    // Central execution mode state (kept in sync with scriptRequest.Mode)
+    private ExecutionMode currentExecutionMode = ExecutionMode.RunOnce;
+    private int currentLoopCount = 1;
+
+    private void OnExecutionModeChanged()
+    {
+        // Sync the enum from the string mode
+        currentExecutionMode = scriptRequest.Mode switch
+        {
+            "LoopXTimes" => ExecutionMode.LoopXTimes,
+            "LoopUntilStopped" => ExecutionMode.LoopUntilStopped,
+            _ => ExecutionMode.RunOnce
+        };
+
+        if (scriptRequest.Mode != "LoopXTimes")
+        {
+            scriptRequest.LoopCount = null;
+        }
+        else if (scriptRequest.LoopCount == null || scriptRequest.LoopCount < 1)
+        {
+            scriptRequest.LoopCount = 1;
+        }
+        currentLoopCount = scriptRequest.LoopCount ?? 1;
+        StateHasChanged();
+    }
+
+    private Task OnExecutionModeChangedFromAgent(ExecutionMode mode)
+    {
+        currentExecutionMode = mode;
+        scriptRequest.Mode = mode switch
+        {
+            ExecutionMode.LoopXTimes => "LoopXTimes",
+            ExecutionMode.LoopUntilStopped => "LoopUntilStopped",
+            _ => "RunOnce"
+        };
+        if (mode != ExecutionMode.LoopXTimes)
+        {
+            scriptRequest.LoopCount = null;
+        }
+        else if (scriptRequest.LoopCount == null || scriptRequest.LoopCount < 1)
+        {
+            scriptRequest.LoopCount = 1;
+        }
+        currentLoopCount = scriptRequest.LoopCount ?? 1;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task OnLoopCountChangedFromAgent(int loopCount)
+    {
+        currentLoopCount = loopCount;
+        scriptRequest.LoopCount = loopCount;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task OnScriptTextChanged(string newText)
+    {
+        scriptRequest.ScriptText = newText;
+        ValidateScript(); // Auto-validate on text change
+        return Task.CompletedTask;
+    }
+
+    private void ValidateScript()
+    {
+        isValidated = ScriptService.ValidateScript(scriptRequest.ScriptText, out validationErrors);
+        StateHasChanged();
+    }
+
+    private async Task SaveScript()
+    {
+        if (isSaving) return;
+        
+        ValidateScript();
+        if (!isValidated)
+        {
+            ShowMessage("Please fix validation errors before saving", true);
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(scriptRequest.Name))
+        {
+            ShowMessage("Script name is required", true);
+            return;
+        }
+        
+        isSaving = true;
+        try
+        {
+            ScriptTemplateResponse? result;
+            
+            if (currentTemplateId.HasValue)
+            {
+                // Update existing script
+                var updateRequest = new UpdateScriptTemplateRequest
+                {
+                    Name = scriptRequest.Name,
+                    Description = scriptRequest.Description,
+                    ScriptText = scriptRequest.ScriptText,
+                    Mode = scriptRequest.Mode,
+                    LoopCount = scriptRequest.LoopCount
+                };
+                result = await ScriptService.UpdateScriptTemplateAsync(currentTemplateId.Value, updateRequest);
+            }
+            else
+            {
+                // Create new script
+                result = await ScriptService.CreateScriptTemplateAsync(scriptRequest);
+                if (result != null)
+                {
+                    currentTemplateId = result.Id;
+                }
+            }
+            
+            if (result != null)
+            {
+                ShowMessage($"Script '{result.Name}' saved successfully", false);
+                await LoadTemplatesList(); // Refresh templates list
+            }
+            else
+            {
+                ShowMessage("Failed to save script", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error saving script: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task RunScriptOnAgent()
+    {
+        if (!selectedAgentId.HasValue || !isValidated)
+        {
+            ShowMessage("Agent must be selected and script must be validated", true);
+            return;
+        }
+        
+        try
+        {
+            // Use the synced execution mode
+            var loopCount = currentExecutionMode == ExecutionMode.LoopXTimes 
+                ? (int?)Math.Max(1, currentLoopCount) 
+                : null;
+
+            var success = await ScriptService.RunScriptOnAgentAsync(
+                selectedAgentId.Value, 
+                scriptRequest.ScriptText,
+                currentExecutionMode,
+                loopCount
+            );
+
+            if (success)
+            {
+                ShowMessage("Script sent to agent successfully", false);
+            }
+            else
+            {
+                ShowMessage("Failed to send script to agent", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error running script: {ex.Message}", true);
+        }
+    }
+
+    private async Task PauseAgentScript()
+    {
+        if (!selectedAgentId.HasValue) return;
+        
+        try
+        {
+            var success = await ScriptService.PauseAgentAsync(selectedAgentId.Value);
+            if (success)
+            {
+                ShowMessage("Pause command sent to agent", false);
+            }
+            else
+            {
+                ShowMessage("Failed to pause agent", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error pausing agent: {ex.Message}", true);
+        }
+    }
+
+    private async Task ResumeAgentScript()
+    {
+        if (!selectedAgentId.HasValue) return;
+        
+        try
+        {
+            var success = await ScriptService.ResumeAgentAsync(selectedAgentId.Value);
+            if (success)
+            {
+                ShowMessage("Resume command sent to agent", false);
+            }
+            else
+            {
+                ShowMessage("Failed to resume agent", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error resuming agent: {ex.Message}", true);
+        }
+    }
+
+    private async Task StopAgentScript()
+    {
+        if (!selectedAgentId.HasValue) return;
+        
+        try
+        {
+            var success = await ScriptService.StopAgentAsync(selectedAgentId.Value);
+            if (success)
+            {
+                ShowMessage("Stop command sent to agent", false);
+            }
+            else
+            {
+                ShowMessage("Failed to stop agent", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error stopping agent: {ex.Message}", true);
+        }
+    }
+
+    private void ClearScript()
+    {
+        scriptRequest.ScriptText = string.Empty;
+        scriptRequest.Name = string.Empty;
+        scriptRequest.Description = string.Empty;
+        validationErrors.Clear();
+        isValidated = false;
+        currentTemplateId = null;
+    }
+
+    private string GetSelectedTemplate()
+    {
+        return currentTemplateId?.ToString() ?? "new";
+    }
+
+    private async Task OnTemplateSelectionChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        
+        if (value == "new")
+        {
+            // Clear for new script
+            ClearScript();
+        }
+        else if (Guid.TryParse(value, out var templateId))
+        {
+            await LoadTemplateById(templateId);
+        }
+    }
+
+    private void ShowMessage(string message, bool error)
+    {
+        statusMessage = message;
+        isError = error;
+        StateHasChanged();
+        
+        // Auto-hide success messages
+        if (!error)
+        {
+            _ = Task.Delay(3000).ContinueWith(_ => 
+            {
+                InvokeAsync(() => 
+                {
+                    statusMessage = null;
+                    StateHasChanged();
+                });
+            });
+        }
+    }
+}

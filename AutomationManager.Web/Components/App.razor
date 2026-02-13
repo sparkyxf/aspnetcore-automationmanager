@@ -4,28 +4,41 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutomationManager</title>
     <base href="/" />
-    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
-    <link rel="stylesheet" href="@Assets["app.css"]" />
-    <link rel="stylesheet" href="@Assets["AutomationManager.Web.styles.css"]" />
-    <ImportMap />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="css/app.css" rel="stylesheet" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <HeadOutlet />
 </head>
 
-<body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <div class="container">
-            <a class="navbar-brand" href="/">AutomationManager</a>
-            <div class="navbar-nav">
-                <NavLink class="nav-link" href="/dashboard">Dashboard</NavLink>
-                <NavLink class="nav-link" href="/script-editor">Script Editor</NavLink>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="bi bi-gear-fill me-2"></i>AutomationManager
+            </a>
+            <div class="navbar-nav ms-auto">
+                <NavLink class="nav-link" href="/dashboard">
+                    <i class="bi bi-speedometer2 me-1"></i>Dashboard
+                </NavLink>
+                <NavLink class="nav-link" href="/script-editor">
+                    <i class="bi bi-code-square me-1"></i>Script Editor
+                </NavLink>
+                <NavLink class="nav-link" href="/templates">
+                    <i class="bi bi-journal-code me-1"></i>Templates
+                </NavLink>
             </div>
         </div>
     </nav>
-    <div class="container mt-4">
+    
+    <main class="container-fluid py-4">
         <Routes />
-    </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <script src="js/script-editor.js"></script>
     <script src="_framework/blazor.web.js"></script>
 </body>
 

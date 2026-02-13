@@ -1,5 +1,8 @@
 {
     "chat.tools.terminal.autoApprove": {
-        "dotnet remove": true
+        "dotnet remove": true,
+        "Push-Location": true,
+        "Pop-Location": true,
+        "dotnet ef": true
     }
 }

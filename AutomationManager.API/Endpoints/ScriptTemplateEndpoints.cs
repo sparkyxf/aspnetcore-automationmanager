@@ -15,7 +15,40 @@ public static class ScriptTemplateEndpoints
         {
             var query = new GetScriptTemplatesQuery(search, page, pageSize, sortBy, sortDescending);
             var result = await mediator.Send(query);
-            return Results.Ok(result);
+            
+            var response = new PagedResult<ScriptTemplateResponse>(
+                result.Items.Select(dto => new ScriptTemplateResponse(
+                    dto.Id,
+                    dto.Name,
+                    dto.Description,
+                    dto.ScriptText,
+                    dto.Mode.ToString(),
+                    dto.LoopCount
+                )),
+                result.TotalCount,
+                result.Page,
+                result.PageSize
+            );
+            
+            return Results.Ok(response);
+        });
+
+        group.MapGet("/{id}", async (IMediator mediator, Guid id) =>
+        {
+            var query = new GetScriptTemplateByIdQuery(id);
+            var result = await mediator.Send(query);
+            
+            if (result == null)
+                return Results.NotFound();
+            
+            return Results.Ok(new ScriptTemplateResponse(
+                result.Id,
+                result.Name,
+                result.Description,
+                result.ScriptText,
+                result.Mode.ToString(),
+                result.LoopCount
+            ));
         });
 
         group.MapPost("/", async (IMediator mediator, ScriptTemplateRequest request) =>

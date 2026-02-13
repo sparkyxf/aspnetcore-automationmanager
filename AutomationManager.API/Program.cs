@@ -1,9 +1,11 @@
 using AutomationManager.API.Middleware;
 using AutomationManager.API.Endpoints;
+using AutomationManager.API.Services;
 using AutomationManager.Application.Handlers;
 using AutomationManager.Domain.Entities;
 using AutomationManager.Infrastructure;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 // using Microsoft.AspNetCore.Authentication.JwtBearer;
 // using Microsoft.IdentityModel.Tokens;
@@ -28,6 +30,9 @@ builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AutomationDbContext>("database");
 
+// Add in-memory agent tracker
+builder.Services.AddSingleton<ConnectedAgentTracker>();
+
 // WebSocket support is built into ASP.NET Core, no need to add services for it
 
 // Commented JWT setup
@@ -49,6 +54,14 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
+// Register graceful WebSocket shutdown
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(() =>
+{
+    var agentTracker = app.Services.GetRequiredService<ConnectedAgentTracker>();
+    agentTracker.CloseAllConnectionsAsync().GetAwaiter().GetResult();
+});
+
 // Middleware
 app.UseSerilogRequestLogging();
 app.UseMiddleware<CorrelationIdMiddleware>();
@@ -59,6 +72,18 @@ app.UseWebSockets();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AutomationDbContext>();
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+    // Apply pending migrations when using a real database (not InMemory)
+    if (!string.IsNullOrEmpty(connectionString) && !connectionString.Contains("InMemory"))
+    {
+        context.Database.Migrate();
+    }
+    else
+    {
+        context.Database.EnsureCreated();
+    }
+
     SeedData.Initialize(context);
 }
 

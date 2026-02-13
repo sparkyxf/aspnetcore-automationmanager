@@ -24,8 +24,8 @@ public static class SeedData
             {
                 Id = Guid.NewGuid(),
                 Name = "Sample Script",
-                Description = "A sample automation script",
-                ScriptText = "KeyDown(A);\nDelay(1000);\nKeyUp(A);",
+                Description = "A sample automation script with command groups",
+                ScriptText = "// Define a reusable key press group\n@group(PressA) {\n  KeyDown(A);\n  Delay(100);\n  KeyUp(A);\n}\n\n// Execute the group 3 times with delays\nExecuteGroup(PressA, 3);\nDelay(500);\nMouseMove(100, 200);\nMouseClick(Left);",
                 Mode = ExecutionMode.RunOnce
             }
         };

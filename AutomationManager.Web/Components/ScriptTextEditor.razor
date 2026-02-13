@@ -1,0 +1,206 @@
+@using AutomationManager.Contracts
+@inject IJSRuntime JS
+
+<div class="card h-100">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">
+            <i class="bi bi-file-text me-1"></i>Script Content
+        </h6>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" @onclick="OnClear">
+                <i class="bi bi-trash me-1"></i>Clear
+            </button>
+            <button class="btn btn-outline-secondary" @onclick="ShowHelp">
+                <i class="bi bi-question-circle me-1"></i>Help
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <textarea @ref="textareaRef"
+                 @bind="ScriptText" 
+                 @oninput="OnTextChanged"
+                 @onkeydown="HandleKeyDown"
+                 @onkeydown:preventDefault="shouldPreventDefault"
+                 class="form-control script-editor border-0 h-100" 
+                 rows="20" 
+                 placeholder="Write your automation script here...&#10;&#10;Examples:&#10;KeyDown(A);&#10;Delay(1000);&#10;KeyUp(A);&#10;MouseMove(500,300);&#10;MouseClick(Left);&#10;&#10;Groups:&#10;&#64;group(MyGroup) {&#10;  Delay(100);&#10;};&#10;ExecuteGroup(MyGroup,3);"
+                 style="resize: none; min-height: 400px; font-family: 'Courier New', monospace; font-size: 14px;"></textarea>
+    </div>
+    @if (ValidationErrors.Any())
+    {
+        <div class="card-footer bg-danger bg-opacity-10 border-danger">
+            <h6 class="text-danger mb-2">
+                <i class="bi bi-exclamation-triangle me-1"></i>Validation Errors
+            </h6>
+            @foreach (var error in ValidationErrors)
+            {
+                <div class="text-danger small mb-1">
+                    <i class="bi bi-dot me-1"></i>@error
+                </div>
+            }
+        </div>
+    }
+    else if (IsValidated && !string.IsNullOrWhiteSpace(ScriptText))
+    {
+        <div class="card-footer bg-success bg-opacity-10 border-success">
+            <span class="text-success">
+                <i class="bi bi-check-circle me-1"></i>Script is valid
+            </span>
+        </div>
+    }
+</div>
+
+@if (showHelp)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-book me-2"></i>Script Language Reference
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => showHelp = false"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>Command Format</h6>
+                    <p>Each command must be on its own line and end with a semicolon:</p>
+                    <code>CommandName(parameters);</code>
+                    
+                    <h6 class="mt-4">Available Commands</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Command</th>
+                                    <th>Parameters</th>
+                                    <th>Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>KeyDown</code></td>
+                                    <td>Key</td>
+                                    <td><code>KeyDown(A);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>KeyUp</code></td>
+                                    <td>Key</td>
+                                    <td><code>KeyUp(A);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>KeyPress</code></td>
+                                    <td>Key</td>
+                                    <td><code>KeyPress(Space);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>MouseDown</code></td>
+                                    <td>Left, Right, Middle</td>
+                                    <td><code>MouseDown(Left);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>MouseUp</code></td>
+                                    <td>Left, Right, Middle</td>
+                                    <td><code>MouseUp(Left);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>MouseClick</code></td>
+                                    <td>Left, Right, Middle</td>
+                                    <td><code>MouseClick(Left);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>MouseMove</code></td>
+                                    <td>X, Y coordinates</td>
+                                    <td><code>MouseMove(500,300);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>Delay</code></td>
+                                    <td>Milliseconds</td>
+                                    <td><code>Delay(1000);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>ExecuteGroup</code></td>
+                                    <td>Group name, loop count</td>
+                                    <td><code>ExecuteGroup(CommandSequence1,5);</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>@("@group")</code></td>
+                                    <td>Group name</td>
+                                    <td><code>@("@group(CommandSequence1) { ... }")</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <h6 class="mt-4">Comments</h6>
+                    <p>Lines starting with <code>//</code> are comments and will be ignored.</p>
+                    <code>// This is a comment</code>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showHelp = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool showHelp = false;
+    private bool shouldPreventDefault = false;
+    private ElementReference textareaRef;
+
+    [Parameter]
+    public string ScriptText { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> ScriptTextChanged { get; set; }
+
+    [Parameter]
+    public List<string> ValidationErrors { get; set; } = new();
+
+    [Parameter]
+    public bool IsValidated { get; set; }
+
+    [Parameter]
+    public EventCallback OnValidateRequested { get; set; }
+
+    [Parameter]
+    public EventCallback OnClearRequested { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("setupTabHandler", textareaRef);
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Tab")
+        {
+            shouldPreventDefault = true;
+            // Tab insertion is handled by JS interop in setupTabHandler
+        }
+        else
+        {
+            shouldPreventDefault = false;
+        }
+    }
+
+    private async Task OnTextChanged(ChangeEventArgs e)
+    {
+        ScriptText = e.Value?.ToString() ?? string.Empty;
+        await ScriptTextChanged.InvokeAsync(ScriptText);
+        await OnValidateRequested.InvokeAsync();
+    }
+
+    private Task OnClear()
+    {
+        return OnClearRequested.InvokeAsync();
+    }
+
+    private void ShowHelp()
+    {
+        showHelp = true;
+    }
+}

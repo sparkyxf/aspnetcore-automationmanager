@@ -19,16 +19,16 @@ public class ExecutionEngine : IExecutionEngine
 
     public async Task ExecuteAsync(ScriptExecution execution, CancellationToken cancellationToken = default)
     {
-        var commands = _parser.Parse(execution.ScriptTemplate.ScriptText).ToList();
+        var parsed = _parser.ParseScript(execution.ScriptTemplate.ScriptText);
+        var commands = parsed.Commands;
+        var groups = parsed.Groups;
         var index = 0;
 
         while (index < commands.Count && !cancellationToken.IsCancellationRequested)
         {
             var command = commands[index];
-            // Simulate execution
-            await ExecuteCommandAsync(command, cancellationToken);
+            await ExecuteCommandAsync(command, groups, cancellationToken);
 
-            // Update progress
             execution.PreviousCommands = GetPreviousCommands(commands, index);
             execution.CurrentCommand = GetCurrentCommand(command);
             execution.NextCommands = GetNextCommands(commands, index);
@@ -39,17 +39,29 @@ public class ExecutionEngine : IExecutionEngine
         execution.Status = cancellationToken.IsCancellationRequested ? ExecutionStatus.Canceled : ExecutionStatus.Completed;
     }
 
-    private async Task ExecuteCommandAsync(ParsedCommand command, CancellationToken cancellationToken)
+    private async Task ExecuteCommandAsync(ParsedCommand command, Dictionary<string, CommandGroup> groups, CancellationToken cancellationToken)
     {
-        // In real implementation, this would call Windows API
-        // For domain, just simulate delay
-        if (command.Parameter is DelayParameter delay)
+        if (command.Type == CommandType.ExecuteGroup && command.Parameter is ExecuteGroupParameter groupParam)
+        {
+            if (!groups.TryGetValue(groupParam.GroupName, out var group))
+                throw new InvalidOperationException($"Undefined group: '{groupParam.GroupName}'");
+
+            for (int loop = 0; loop < groupParam.LoopCount && !cancellationToken.IsCancellationRequested; loop++)
+            {
+                foreach (var groupCmd in group.Commands)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await ExecuteCommandAsync(groupCmd, groups, cancellationToken);
+                }
+            }
+        }
+        else if (command.Parameter is DelayParameter delay)
         {
             await Task.Delay(delay.Milliseconds, cancellationToken);
         }
         else
         {
-            await Task.Delay(100, cancellationToken); // simulate
+            await Task.Delay(100, cancellationToken);
         }
     }
 

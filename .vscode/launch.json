@@ -1,0 +1,82 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch API",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/AutomationManager.API/bin/Debug/net9.0/AutomationManager.API.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/AutomationManager.API",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "sourceFileMap": {
+                "/Views": "${workspaceFolder}/Views"
+            }
+        },
+        {
+            "name": "Launch Web",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/AutomationManager.Web/bin/Debug/net9.0/AutomationManager.Web.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/AutomationManager.Web",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "sourceFileMap": {
+                "/Views": "${workspaceFolder}/Views"
+            }
+        },
+        {
+            "name": "Launch Agent",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/AutomationManager.Agent/bin/Debug/net9.0/AutomationManager.Agent.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/AutomationManager.Agent",
+            "stopAtEntry": false,
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Launch All (API + Web + Agent)",
+            "configurations": [
+                "Launch API",
+                "Launch Web", 
+                "Launch Agent"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "Launch API + Web",
+            "configurations": [
+                "Launch API",
+                "Launch Web"
+            ],
+            "stopAll": true
+        }
+    ]
+}

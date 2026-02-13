@@ -1,0 +1,393 @@
+@using AutomationManager.Contracts
+@using AutomationManager.Web.Services
+@inject AgentTrackerService AgentTracker
+@inject ScriptExecutionService ScriptService
+@implements IDisposable
+
+<div class="card h-100">
+    <div class="card-header">
+        <h6 class="mb-0">
+            <i class="bi bi-hdd-network me-1"></i>Agent & Script Control
+        </h6>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label fw-bold">Select Agent</label>
+            <select class="form-select" value="@(SelectedAgentId?.ToString() ?? string.Empty)" @onchange="OnAgentSelected">
+                <option value="">Select an agent...</option>
+                @if (AllAgents != null)
+                {
+                    @foreach (var agent in AllAgents)
+                    {
+                        <option value="@agent.AgentId">
+                            @agent.AgentName (@agent.Status) @(agent.IsConnected ? "🟢" : "🔴")
+                        </option>
+                    }
+                }
+            </select>
+            <div class="form-text">All tracked agents shown - green for connected</div>
+        </div>
+
+        @if (SelectedAgentId.HasValue && SelectedAgent != null)
+        {
+            <div class="alert alert-@(CanRunScript ? "success" : "warning") mb-3">
+                <h6 class="alert-heading mb-2">
+                    <i class="bi bi-controller me-1"></i>Script Control
+                </h6>
+                
+                @* Execution Parameters *@
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Execution Mode</label>
+                        <select class="form-select form-select-sm" value="@ExecutionMode" @onchange="OnExecutionModeLocalChanged">
+                            <option value="@AutomationManager.Contracts.ExecutionMode.RunOnce">Run Once</option>
+                            <option value="@AutomationManager.Contracts.ExecutionMode.LoopXTimes">Loop X Times</option>
+                            <option value="@AutomationManager.Contracts.ExecutionMode.LoopUntilStopped">Loop Until Stopped</option>
+                        </select>
+                    </div>
+                    
+                    @if (ExecutionMode == AutomationManager.Contracts.ExecutionMode.LoopXTimes)
+                    {
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Loop Count</label>
+                            <input type="number" class="form-control form-control-sm" 
+                                   value="@LoopCount" @onchange="OnLoopCountLocalChanged" min="1" max="999" />
+                        </div>
+                    }
+                </div>
+                
+                @* Execution Status Display *@
+                @if (SelectedAgent != null)
+                {
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1"><strong>Execution Status:</strong></small>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge @GetExecutionStatusBadgeClass(SelectedAgent.ScriptExecutionStatus)">
+                                @(SelectedAgent.ScriptExecutionStatus ?? "Idle")
+                            </span>
+                            @if (SelectedAgent.CurrentCommandIndex.HasValue && SelectedAgent.TotalCommands.HasValue)
+                            {
+                                <small class="text-muted">
+                                    Command @(SelectedAgent.CurrentCommandIndex + 1) of @SelectedAgent.TotalCommands
+                                </small>
+                            }
+                        </div>
+                        @if (SelectedAgent.ExecutionMode == "LoopXTimes" && SelectedAgent.TotalLoops.HasValue)
+                        {
+                            <div class="mt-1">
+                                <small class="text-info fw-bold">
+                                    <i class="bi bi-arrow-repeat me-1"></i>Loop @(SelectedAgent.CurrentLoop + 1) of @SelectedAgent.TotalLoops
+                                </small>
+                                <div class="progress mt-1" style="height: 6px;">
+                                    <div class="progress-bar bg-info" role="progressbar" 
+                                         style="width: @(SelectedAgent.TotalLoops > 0 ? ((SelectedAgent.CurrentLoop.GetValueOrDefault() + 1) * 100 / SelectedAgent.TotalLoops.Value) : 0)%">
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else if (SelectedAgent.ExecutionMode == "LoopUntilStopped")
+                        {
+                            <div class="mt-1">
+                                <small class="text-warning fw-bold">
+                                    <i class="bi bi-infinity me-1"></i>Loop Until Stopped — Iteration @(SelectedAgent.CurrentLoop + 1)
+                                </small>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(SelectedAgent.ErrorMessage))
+                        {
+                            <div class="text-danger small mt-1">
+                                <i class="bi bi-exclamation-triangle me-1"></i>@SelectedAgent.ErrorMessage
+                            </div>
+                        }
+                    </div>
+                }
+
+                <p class="mb-2 small">
+                    @if (!(SelectedAgent?.IsConnected ?? false))
+                    {
+                        <span class="text-danger">Agent is disconnected. Waiting for connection...</span>
+                    }
+                    else if (!IsScriptValidated)
+                    {
+                        <span class="text-warning">Script must be validated before running.</span>
+                    }
+                    else if (SelectedAgent.Status == "Active")
+                    {
+                        <span class="text-info">Agent is currently running a script.</span>
+                    }
+                    else
+                    {
+                        <span class="text-success">Agent is ready. You can run the current script.</span>
+                    }
+                </p>
+                <p>Status: @SelectedAgent?.Status</p>
+                <p>Script Execution Status: @SelectedAgent?.ScriptExecutionStatus</p>
+                <div class="d-grid gap-2">
+                    @if (SelectedAgent?.Status == "Active")
+                    {
+                        <button class="btn btn-warning" @onclick="OnPauseScript" disabled="@(!(SelectedAgent?.IsConnected ?? false))">
+                            <i class="bi bi-pause-circle me-1"></i>Pause Script
+                        </button>
+                        <button class="btn btn-danger" @onclick="OnStopScript" disabled="@(!(SelectedAgent?.IsConnected ?? false))">
+                            <i class="bi bi-stop-circle me-1"></i>Stop Script
+                        </button>
+                    }
+                    else if (SelectedAgent?.Status == "Paused")
+                    {
+                        <button class="btn btn-info" @onclick="OnResumeScript" disabled="@(!(SelectedAgent?.IsConnected ?? false))">
+                            <i class="bi bi-play-fill me-1"></i>Resume Script
+                        </button>
+                        <button class="btn btn-danger" @onclick="OnStopScript" disabled="@(!(SelectedAgent?.IsConnected ?? false))">
+                            <i class="bi bi-stop-circle me-1"></i>Stop Script
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-success" @onclick="OnRunScript" disabled="@(!CanRunScript)">
+                            <i class="bi bi-play-circle me-1"></i>Run Script on Agent
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="alert-heading mb-2">
+                            <i class="bi bi-info-circle me-1"></i>Agent Status
+                        </h6>
+                        <div class="mb-1">
+                            <strong>Name:</strong> @SelectedAgent.AgentName
+                        </div>
+                        <div class="mb-1">
+                            <strong>Status:</strong> 
+                            <span class="badge @(SelectedAgent.IsConnected ? "bg-success" : "bg-danger")">
+                                @(SelectedAgent.IsConnected ? SelectedAgent.Status : "Disconnected")
+                            </span>
+                        </div>
+                        <div class="mb-1">
+                            <strong>Last Message:</strong> 
+                            <span class="text-muted small">@SelectedAgent.LastMessageTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                        </div>
+                        @if (SelectedAgent.CursorX.HasValue && SelectedAgent.CursorY.HasValue)
+                        {
+                            <div class="mb-1">
+                                <i class="bi bi-cursor-fill me-1"></i>
+                                <strong>Cursor:</strong> 
+                                <span class="font-monospace small">
+                                    X: @Math.Round(SelectedAgent.CursorX.Value), 
+                                    Y: @Math.Round(SelectedAgent.CursorY.Value)
+                                </span>
+                            </div>
+                        }
+                        
+                        <div class="mt-2">
+                            <small class="text-muted d-block mb-1"><strong>Next Commands:</strong></small>
+                            <div class="small" style="max-height: 120px; overflow-y: auto;">
+                                @foreach (var cmd in SelectedAgent.NextCommands.Take(3))
+                                {
+                                    <code class="d-block p-2 mb-1 bg-light rounded text-muted">@cmd</code>
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <small class="text-muted d-block mb-1"><strong>Current Command:</strong></small>
+                            <div class="small" style="max-height: 120px; overflow-y: auto;">
+                                @if (!string.IsNullOrEmpty(SelectedAgent.CurrentCommand))
+                                {
+                                    <code class="d-block p-2 bg-success text-light rounded">@SelectedAgent.CurrentCommand</code>
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <small class="text-muted d-block mb-1"><strong>Previous Commands:</strong></small>
+                            <div class="small" style="max-height: 120px; overflow-y: auto;">
+                                @foreach (var cmd in SelectedAgent.PreviousCommands.TakeLast(3))
+                                {
+                                    <code class="d-block p-2 mb-1 bg-light rounded text-muted">@cmd</code>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        @if (SelectedAgent.IsConnected)
+                        {
+                            <div class="spinner-grow spinner-grow-sm text-success" role="status">
+                                <span class="visually-hidden">Live</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else if (!SelectedAgentId.HasValue)
+        {
+            <div class="alert alert-secondary mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                No agent selected. Select an agent above to see status and control scripts.
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-warning mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Agent not found in tracker. It may have disconnected.
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private IEnumerable<TrackedAgent>? AllAgents;
+    private TrackedAgent? SelectedAgent;
+
+    [Parameter]
+    public Guid? SelectedAgentId { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> SelectedAgentIdChanged { get; set; }
+
+    [Parameter]
+    public string ScriptText { get; set; } = "";
+
+    [Parameter]
+    public bool IsScriptValidated { get; set; }
+
+    [Parameter]
+    public ExecutionMode ExecutionMode { get; set; } = ExecutionMode.RunOnce;
+
+    [Parameter]
+    public EventCallback<ExecutionMode> ExecutionModeChanged { get; set; }
+
+    [Parameter]
+    public int LoopCount { get; set; } = 1;
+
+    [Parameter]
+    public EventCallback<int> LoopCountChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnRunScriptRequested { get; set; }
+
+    [Parameter]
+    public EventCallback OnPauseScriptRequested { get; set; }
+
+    [Parameter]
+    public EventCallback OnResumeScriptRequested { get; set; }
+
+    [Parameter]
+    public EventCallback OnStopScriptRequested { get; set; }
+
+    private bool CanRunScript => SelectedAgent?.IsConnected == true && 
+                                 SelectedAgent.Status == "Idle" && 
+                                 IsScriptValidated && 
+                                 !string.IsNullOrWhiteSpace(ScriptText);
+
+    protected override void OnInitialized()
+    {
+        AgentTracker.OnAgentsChanged += LoadAgents;
+        LoadAgents();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedAgentId.HasValue)
+        {
+            SelectedAgent = AgentTracker.GetAgent(SelectedAgentId.Value);
+        }
+        else
+        {
+            SelectedAgent = null;
+        }
+    }
+
+    private void LoadAgents()
+    {
+        AllAgents = AgentTracker.GetAllAgents();
+        if (SelectedAgentId.HasValue)
+        {
+            SelectedAgent = AgentTracker.GetAgent(SelectedAgentId.Value);
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnAgentSelected(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var agentId))
+        {
+            SelectedAgentId = agentId;
+            SelectedAgent = AgentTracker.GetAgent(agentId);
+            await SelectedAgentIdChanged.InvokeAsync(agentId);
+        }
+        else
+        {
+            SelectedAgentId = null;
+            SelectedAgent = null;
+            await SelectedAgentIdChanged.InvokeAsync(null);
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnRunScript()
+    {
+        await OnRunScriptRequested.InvokeAsync();
+    }
+
+    private async Task OnPauseScript()
+    {
+        await OnPauseScriptRequested.InvokeAsync();
+    }
+
+    private async Task OnResumeScript()
+    {
+        await OnResumeScriptRequested.InvokeAsync();
+    }
+
+    private async Task OnStopScript()
+    {
+        await OnStopScriptRequested.InvokeAsync();
+    }
+
+    private async Task OnExecutionModeLocalChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ExecutionMode>(e.Value?.ToString(), out var mode))
+        {
+            ExecutionMode = mode;
+            await ExecutionModeChanged.InvokeAsync(mode);
+            if (mode == AutomationManager.Contracts.ExecutionMode.LoopXTimes && LoopCount < 1)
+            {
+                LoopCount = 1;
+                await LoopCountChanged.InvokeAsync(LoopCount);
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnLoopCountLocalChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var count) && count >= 1)
+        {
+            LoopCount = count;
+            await LoopCountChanged.InvokeAsync(count);
+        }
+    }
+
+    private string GetExecutionStatusBadgeClass(string? status)
+    {
+        return status switch
+        {
+            "Running" => "bg-primary",
+            "Paused" => "bg-warning",
+            "Completed" => "bg-success",
+            "Stopped" => "bg-secondary",
+            "Error" => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    public void Dispose()
+    {
+        AgentTracker.OnAgentsChanged -= LoadAgents;
+    }
+}

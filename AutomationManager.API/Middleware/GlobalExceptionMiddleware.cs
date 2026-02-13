@@ -24,6 +24,13 @@ public class GlobalExceptionMiddleware
         {
             _logger.LogError(ex, "An unhandled exception occurred");
 
+            // Don't try to modify the response if it has already started (e.g., WebSocket connections)
+            if (context.Response.HasStarted)
+            {
+                _logger.LogWarning("The response has already started, cannot send error details");
+                throw;
+            }
+
             var problemDetails = new
             {
                 type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
